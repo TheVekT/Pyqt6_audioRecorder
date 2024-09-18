@@ -1,0 +1,7 @@
+dist/
+settings.json
+resources/
+records/
+__pycache__/
+main.spec
+build/

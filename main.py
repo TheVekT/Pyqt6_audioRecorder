@@ -76,6 +76,7 @@ class MainWindow(QMainWindow):
         self.records_dir = './records'
         if not os.path.exists(self.records_dir):
             os.makedirs(self.records_dir)
+        self.ui.pushButton.setToolTip("Вибір папки збереження.")
         self.load_settings()
         self.setWindowTitle("Диктофон")
                 # Убрать стандартную панель сверху и закруглить окно
@@ -151,7 +152,7 @@ class MainWindow(QMainWindow):
         self.ui.rec_stop.clicked.connect(self.stop_recording)
         # Подключаем кнопку выбора папки
         self.ui.pushButton.clicked.connect(self.choose_folder)
-        self.ui.pushButton.setToolTip("Вибір папки збереження.")
+        
 
 
         self.audio_source = None
@@ -164,11 +165,6 @@ class MainWindow(QMainWindow):
         self.audio_data_paused = bytearray()
 
 
-
-        self.segment_timer = QTimer()
-        self.segment_timer.timeout.connect(self.check_recording_time)
-        self.current_segment_start = None
-        self.segment_duration = None
 
         # Инициализация таймера для мониторинга уровня звука
         self.sound_timer = QTimer()
@@ -206,8 +202,8 @@ class MainWindow(QMainWindow):
 
         if selected_device:
             format = QAudioFormat()
-            format.setSampleRate(22050)
-            format.setChannelCount(1)
+            format.setSampleRate(44800)
+            format.setChannelCount(2)
             format.setSampleFormat(QAudioFormat.SampleFormat.Int16)
 
             self.audio_source_timer = QAudioSource(selected_device, format)
@@ -216,7 +212,7 @@ class MainWindow(QMainWindow):
             if not self.audio_buffer_timer.isOpen():
                 self.audio_buffer = None
         else:
-            print("Выбранное устройство не найдено")
+            pass
 
     def monitor_sound(self):
         """Мониторинг уровня звука и изменение иконки микрофона."""
@@ -239,7 +235,7 @@ class MainWindow(QMainWindow):
             # Пороговое значение, чтобы определить, есть ли звук (регулируйте его)
             slider_value = self.ui.horizontalSlider_2.value() 
             
-            threshold = 300 - slider_value * 10
+            threshold = 220 - slider_value * 7
             if volume_level > threshold:
                 # Если звук превышает порог, делаем иконку зеленой
                 self.ui.micro.setPixmap(QtGui.QPixmap(":/icons/micro_green.png"))
@@ -351,12 +347,7 @@ class MainWindow(QMainWindow):
 
             self.audio_data = bytearray()
             self.audio_source.start(self.audio_buffer)
-                        # Устанавливаем интервал сегмента
-            self.segment_duration = self.get_selected_interval()
-            self.current_segment_start = datetime.now()
 
-            if self.segment_duration:
-                self.segment_timer.start(1000)  # Проверяем каждую секунду
             self.ui.rec_pause.setCheckable(True)
             self.mini_window.ui.rec_pause.setCheckable(True)
             self.ui.rec_start.setChecked(True)
@@ -417,7 +408,6 @@ class MainWindow(QMainWindow):
             self.is_recording = False
             self.is_paused = False
             self.audio_data = bytearray()
-            self.segment_timer.stop()
             self.ui.rec_pause.setCheckable(False)
             self.mini_window.ui.rec_pause.setCheckable(False)
             self.ui.rec_pause.setChecked(False)
@@ -449,12 +439,7 @@ class MainWindow(QMainWindow):
             wav_file.setsampwidth(2)         # 2 байта для Int16
             wav_file.setframerate(22050)     # Уменьшенная частота дискретизации
             wav_file.writeframes(amplified_audio_data)
-    def check_recording_time(self):
-        if self.segment_duration:
-            elapsed_time = (datetime.now() - self.current_segment_start).total_seconds()
-            if elapsed_time >= self.segment_duration:
-                self.stop_recording()
-                self.start_recording()  # Начинаем новую запись
+
     def clean_old_records(self):
     # Получаем количество дней из положения слайдера
         days_to_keep = self.ui.horizontalSlider.value()
@@ -500,7 +485,9 @@ class MainWindow(QMainWindow):
     def update_timer_display(self):
         """Обновляет отображение времени записи."""
         self.elapsed_time += 1
-        
+        if self.elapsed_time == self.get_selected_interval():
+                self.stop_recording()
+                self.start_recording()  # Начинаем новую запись
         # Преобразование секунд в часы, минуты и секунды
         hours = self.elapsed_time // 3600
         minutes = (self.elapsed_time % 3600) // 60
@@ -510,7 +497,7 @@ class MainWindow(QMainWindow):
 
     def choose_folder(self):
         """Открывает диалог выбора папки и сохраняет выбранный путь."""
-        folder = QFileDialog.getExistingDirectory(self, "Выберите папку для сохранения записей", self.records_dir)
+        folder = QFileDialog.getExistingDirectory(self, "Виберіть папку для збереження записів.", self.records_dir)
         if folder:
             self.records_dir = folder
             # Обновляем настройки
@@ -556,6 +543,8 @@ class MainWindow(QMainWindow):
                 self.ui.horizontalSlider_2.setValue(settings['slider2_value'])
             if 'records_dir' in settings:
                 self.records_dir = settings['records_dir']  # Загружаем путь к папке
+                path = os.path.normpath(os.path.join(os.getcwd(), self.records_dir))
+                self.ui.pushButton.setToolTip(f"{path}")
             if 'files_cut' in settings:
                 # Если в настройках указана кнопка, то устанавливаем её
                 checked_button = settings.get('files_cut')

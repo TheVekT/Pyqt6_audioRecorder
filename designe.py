@@ -429,7 +429,6 @@ class Ui_MainWindow(object):
         _translate = QtCore.QCoreApplication.translate
         MainWindow.setWindowTitle(_translate("MainWindow", "MainWindow"))
         self.label_5.setText(_translate("MainWindow", "<html><head/><body><p align=\"center\"><span style=\" font-size:14pt; font-weight:600;\">1 Дн</span></p></body></html>"))
-        self.label.setToolTip(_translate("MainWindow", "<html><head/><body><p><span style=\" font-size:16pt;\">Виділена пам\'ять</span></p></body></html>"))
         self.label.setWhatsThis(_translate("MainWindow", "<html><head/><body><p align=\"center\"><br/></p></body></html>"))
         self.label.setText(_translate("MainWindow", "<html><head/><body><p align=\"center\"><span style=\" font-size:16pt;\">Виділена пам\'ять:</span></p></body></html>"))
         self.label_4.setText(_translate("MainWindow", "<html><head/><body><p align=\"center\"><span style=\" font-size:12pt; font-weight:600;\">100%</span></p></body></html>"))
