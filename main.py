@@ -1,29 +1,27 @@
 import sys
 import json
-import shutil
-from datetime import datetime, timedelta
+from shutil import rmtree
 import numpy as np
 import wave
 import os
 from datetime import datetime
 from designe import Ui_MainWindow 
 from mini import Ui_MiniWindow
-from PyQt6 import QtGui, QtCore
-from PyQt6.QtCore import QIODevice, QBuffer, QTimer, Qt, QPropertyAnimation, QRect, QEasingCurve, QRectF
+from PyQt6.QtCore import QIODevice, QBuffer, QTimer, Qt, QPropertyAnimation, QEasingCurve, QRectF, QEvent, QAbstractAnimation
 from PyQt6.QtMultimedia import QMediaDevices, QAudioSource, QAudioFormat
 from PyQt6.QtWidgets import QMainWindow, QApplication, QMessageBox, QPushButton, QSlider, QLabel, QComboBox, QGraphicsOpacityEffect, QFileDialog
-from PyQt6.QtGui import QIcon, QPainter, QColor, QPainterPath
+from PyQt6.QtGui import QIcon, QPainter, QColor, QPainterPath, QFontDatabase, QMouseEvent, QPixmap
 
 class MiniWindow(QMainWindow):
     def __init__(self):
         super(MiniWindow, self).__init__()
         self.ui = Ui_MiniWindow()
         self.ui.setupUi(self)
-        self.setWindowFlags(QtCore.Qt.WindowType.FramelessWindowHint |
-                    QtCore.Qt.WindowType.WindowMinimizeButtonHint |
-                    QtCore.Qt.WindowType.WindowSystemMenuHint |
-                    QtCore.Qt.WindowType.WindowStaysOnTopHint)
-        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint |
+                    Qt.WindowType.WindowMinimizeButtonHint |
+                    Qt.WindowType.WindowSystemMenuHint |
+                    Qt.WindowType.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         icon = QIcon(":/icons/icon.png")  # Specify the path to your icon
         self.setWindowIcon(icon)
         self.setWindowTitle("Диктофон")
@@ -31,20 +29,22 @@ class MiniWindow(QMainWindow):
         self.ui.label.mouseMoveEvent = self.label_mouse_move_event
         self.ui.label.mouseReleaseEvent = self.label_mouse_release_event
         self.ui.rec_timer_2.hide()
-    def label_mouse_press_event(self, event):
+        self.font_id = QFontDatabase.addApplicationFont(":/icons/Oswald-VariableFont_wght.ttf")
+        
+    def label_mouse_press_event(self, event: QMouseEvent):
         """Запоминаем начальные позиции при нажатии на метку."""
         if event.button() == Qt.MouseButton.LeftButton:
             self.is_dragging = True
             self.mouse_start_position = event.globalPosition().toPoint()
             self.window_start_position = self.frameGeometry().topLeft()
 
-    def label_mouse_move_event(self, event):
+    def label_mouse_move_event(self, event: QMouseEvent):
         """Перемещаем окно при перемещении мыши."""
         if self.is_dragging:
             delta = event.globalPosition().toPoint() - self.mouse_start_position
             self.move(self.window_start_position + delta)
 
-    def label_mouse_release_event(self, event):
+    def label_mouse_release_event(self, event: QMouseEvent):
         """Прекращаем перетаскивание при отпускании кнопки."""
         if event.button() == Qt.MouseButton.LeftButton:
             self.is_dragging = False
@@ -54,7 +54,7 @@ class MiniWindow(QMainWindow):
         
         # Устанавливаем цвет фона окна
         painter.setBrush(QColor(255, 255, 255))  # Белый фон, если необходимо
-        painter.setPen(QtCore.Qt.PenStyle.NoPen)
+        painter.setPen(Qt.PenStyle.NoPen)
 
         # Рисуем скругленный прямоугольник
         rect = self.rect()
@@ -80,10 +80,10 @@ class MainWindow(QMainWindow):
         self.load_settings()
         self.setWindowTitle("Диктофон")
                 # Убрать стандартную панель сверху и закруглить окно
-        self.setWindowFlags(QtCore.Qt.WindowType.FramelessWindowHint |
-                    QtCore.Qt.WindowType.WindowMinimizeButtonHint |
-                    QtCore.Qt.WindowType.WindowSystemMenuHint)
-        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint |
+                    Qt.WindowType.WindowMinimizeButtonHint |
+                    Qt.WindowType.WindowSystemMenuHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFixedSize(620, 315)  # Ширина и высота в пикселях
         self.is_recording = False
         icon = QIcon(":/icons/icon.png")  # Specify the path to your icon
@@ -238,13 +238,13 @@ class MainWindow(QMainWindow):
             threshold = 220 - slider_value * 7
             if volume_level > threshold:
                 # Если звук превышает порог, делаем иконку зеленой
-                self.ui.micro.setPixmap(QtGui.QPixmap(":/icons/micro_green.png"))
+                self.ui.micro.setPixmap(QPixmap(":/icons/micro_green.png"))
             else:
                 # Если звука нет, возвращаем обычную иконку
-                self.ui.micro.setPixmap(QtGui.QPixmap(":/icons/micro.png"))
+                self.ui.micro.setPixmap(QPixmap(":/icons/micro.png"))
         else:
             # Если аудио устройство не инициализировано, возвращаем обычную иконку
-            self.ui.micro.setPixmap(QtGui.QPixmap(":/icons/micro.png"))
+            self.ui.micro.setPixmap(QPixmap(":/icons/micro.png"))
 
 
 
@@ -463,7 +463,7 @@ class MainWindow(QMainWindow):
 
                 # Если папка старше указанного количества дней, удаляем её
                 if days_diff > days_to_keep:
-                    shutil.rmtree(folder_path)
+                    rmtree(folder_path)
                     print(f"Удалена папка: {folder_path}")
     def start_timer(self):
         """Запускает таймер и показывает элемент."""
@@ -606,16 +606,16 @@ class MainWindow(QMainWindow):
         for button in buttons:
             button.installEventFilter(self)
             self.original_rects[button] = button.geometry()
-            animation = QtCore.QPropertyAnimation(button, b"geometry")
+            animation = QPropertyAnimation(button, b"geometry")
             animation.setDuration(200)  # Длительность анимации в миллисекундах
-            animation.setEasingCurve(QtCore.QEasingCurve.Type.InOutQuad)
+            animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
             self.animations[button] = animation
     
     def eventFilter(self, obj, event):
         if obj in self.animations:
-            if event.type() == QtCore.QEvent.Type.Enter:
+            if event.type() == QEvent.Type.Enter:
                 self.animate_button(obj, increase=True)
-            elif event.type() == QtCore.QEvent.Type.Leave:
+            elif event.type() == QEvent.Type.Leave:
                 self.animate_button(obj, increase=False)
         return super(MainWindow, self).eventFilter(obj, event)
     
@@ -631,7 +631,7 @@ class MainWindow(QMainWindow):
             end_rect = self.original_rects[button]  # Возвращаем к исходным размерам
         
         # Если анимация уже была запущена, останавливаем ее
-        if animation.state() == QtCore.QAbstractAnimation.State.Running:
+        if animation.state() == QAbstractAnimation.State.Running:
             animation.stop()
         
         animation.setStartValue(start_rect)
@@ -666,7 +666,7 @@ class MainWindow(QMainWindow):
         
         # Устанавливаем цвет фона окна
         painter.setBrush(QColor(255, 255, 255))  # Белый фон, если необходимо
-        painter.setPen(QtCore.Qt.PenStyle.NoPen)
+        painter.setPen(Qt.PenStyle.NoPen)
 
         # Рисуем скругленный прямоугольник
         rect = self.rect()
