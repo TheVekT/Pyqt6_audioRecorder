@@ -17,6 +17,7 @@ class Ui_MiniWindow(object):
 "    background: qlineargradient(spread:pad, x1:0, y1:0, x2:0.95, y2:0.16, stop:0 #8EC5FC, stop:1 #E0C3FC);\n"
 "    font-family: \"Oswald\", sans-serif;\n"
 "    border-radius: 7px;\n"
+"    color: black;\n"
 "}")
         self.centralwidget = QtWidgets.QWidget(parent=MainWindow)
         self.centralwidget.setObjectName("centralwidget")

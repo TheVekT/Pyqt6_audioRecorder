@@ -4,7 +4,7 @@ from shutil import rmtree
 import numpy as np
 import wave
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from designe import Ui_MainWindow 
 from mini import Ui_MiniWindow
 from PyQt6.QtCore import QIODevice, QBuffer, QTimer, Qt, QPropertyAnimation, QEasingCurve, QRectF, QEvent, QAbstractAnimation
@@ -17,6 +17,7 @@ class MiniWindow(QMainWindow):
         super(MiniWindow, self).__init__()
         self.ui = Ui_MiniWindow()
         self.ui.setupUi(self)
+        
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint |
                     Qt.WindowType.WindowMinimizeButtonHint |
                     Qt.WindowType.WindowSystemMenuHint |
@@ -30,6 +31,7 @@ class MiniWindow(QMainWindow):
         self.ui.label.mouseReleaseEvent = self.label_mouse_release_event
         self.ui.rec_timer_2.hide()
         self.font_id = QFontDatabase.addApplicationFont(":/icons/Oswald-VariableFont_wght.ttf")
+        
         
     def label_mouse_press_event(self, event: QMouseEvent):
         """Запоминаем начальные позиции при нажатии на метку."""
@@ -167,6 +169,7 @@ class MainWindow(QMainWindow):
 
 
         # Инициализация таймера для мониторинга уровня звука
+        self.split_timer = None
         self.sound_timer = QTimer()
         self.sound_timer.setInterval(100)  # Интервал проверки (в миллисекундах)
         self.sound_timer.timeout.connect(self.monitor_sound)
@@ -174,7 +177,6 @@ class MainWindow(QMainWindow):
                 # Подключаем событие изменения выбора в comboBox
         self.ui.comboBox.currentIndexChanged.connect(self.update_microphone)
         self.update_microphone()  # Устанавливаем аудио устройство по умолчанию
-
 
         
     def get_selected_interval(self):
@@ -235,7 +237,7 @@ class MainWindow(QMainWindow):
             # Пороговое значение, чтобы определить, есть ли звук (регулируйте его)
             slider_value = self.ui.horizontalSlider_2.value() 
             
-            threshold = 220 - slider_value * 7
+            threshold = 150 - slider_value * 6
             if volume_level > threshold:
                 # Если звук превышает порог, делаем иконку зеленой
                 self.ui.micro.setPixmap(QPixmap(":/icons/micro_green.png"))
@@ -245,9 +247,78 @@ class MainWindow(QMainWindow):
         else:
             # Если аудио устройство не инициализировано, возвращаем обычную иконку
             self.ui.micro.setPixmap(QPixmap(":/icons/micro.png"))
+            
+    def get_next_split_time(self, now: datetime) -> datetime:
+        """
+        Рассчитывает ближайшую &laquo;круглую&raquo; точку времени
+        для выбранного паттерна (10, 30, 60, 120 минут).
+        """
+        pattern = self.get_selected_interval() / 60
+        # Обрежем секунды и микросекунды, чтобы было удобнее считать
+        dt = now.replace(second=0, microsecond=0)
 
+        if pattern == 10:
+            # Каждые 10 минут: XX:00, XX:10, XX:20, XX:30, XX:40, XX:50
+            minute = dt.minute
+            slot_10 = (minute // 10) + 1
+            next_m = slot_10 * 10
+            if next_m >= 60:
+                # Перекатываемся на следующий час
+                return (dt.replace(minute=0) + timedelta(hours=1))
+            else:
+                return dt.replace(minute=next_m)
 
+        elif pattern == 30:
+            # Каждые 30 минут: XX:00, XX:30
+            minute = dt.minute
+            if minute < 30:
+                return dt.replace(minute=30)
+            else:
+                # Следующий час
+                return (dt.replace(minute=0) + timedelta(hours=1))
 
+        elif pattern == 60:
+            # Каждый час: XX:00
+            # просто +1 час от текущего &laquo;округлённого&raquo;
+            return dt.replace(minute=0) + timedelta(hours=1)
+
+        elif pattern == 120:
+            # Каждые 2 часа
+            # Округляем до начала текущего часа
+            dt = dt.replace(minute=0, second=0, microsecond=0)
+            
+            # Если текущий час нечётный, переходим на ближайший чётный
+            if dt.hour % 2 != 0:
+                dt = dt + timedelta(hours=1)
+            
+            # Добавляем 2 часа от текущего "округлённого" времени
+            return dt + timedelta(hours=2)
+
+        # fallback
+        return dt + timedelta(hours=1)
+
+    def schedule_next_split(self):
+        if self.split_timer is not None:
+            self.split_timer.stop()
+        
+            
+        now = datetime.now()
+        next_dt = self.get_next_split_time(now)
+        print(f'Scheduled split time: {next_dt}')
+        delta = (next_dt - now).total_seconds()
+        ms = max(int(delta * 1000), 0)
+
+        self.split_timer = QTimer(self)
+        self.split_timer.setSingleShot(True)
+        def split_record():
+            if self.is_recording and not self.is_paused:
+                self.stop_recording()
+                self.start_recording()
+            elif self.is_paused:
+                self.schedule_next_split()
+            
+        self.split_timer.timeout.connect(split_record)
+        self.split_timer.start(ms)
 
     def update_label_5(self, value):
         # Обновляем текст метки label_5 с сохранением стилей
@@ -314,6 +385,8 @@ class MainWindow(QMainWindow):
             selected_device_description = self.ui.comboBox.currentText()
             input_devices = QMediaDevices.audioInputs()
             selected_device = None
+            if not os.path.exists(self.records_dir):
+                os.makedirs(self.records_dir)
             for device in input_devices:
                 if device.description() == selected_device_description:
                     selected_device = device
@@ -343,11 +416,10 @@ class MainWindow(QMainWindow):
             self.file_path = os.path.join(self.date_folder_path, self.file_name)
 
             slider_value = self.ui.horizontalSlider_2.value() * 10 / 100.0
-            self.gain = 1 + slider_value
+            self.gain = (1 + slider_value * 2) * 1.2
 
             self.audio_data = bytearray()
             self.audio_source.start(self.audio_buffer)
-
             self.ui.rec_pause.setCheckable(True)
             self.mini_window.ui.rec_pause.setCheckable(True)
             self.ui.rec_start.setChecked(True)
@@ -414,17 +486,22 @@ class MainWindow(QMainWindow):
             self.ui.rec_pause.setEnabled(True)
             self.ui.rec_start.setChecked(False)
             self.mini_window.ui.rec_start.setChecked(False)
-
+            if self.split_timer:
+                self.split_timer.stop()
             self.stop_timer()
             self.ui.rec_start.setEnabled(True)
             self.mini_window.ui.rec_pause.setEnabled(True)
             self.mini_window.ui.rec_start.setEnabled(True)
             self.block_groupbox_elements(False)
+            if not os.path.exists(self.records_dir):
+                os.makedirs(self.records_dir)
 
 
 
     def save_audio_data(self):
         # Получаем данные из буфера
+        if not os.path.exists(self.records_dir):
+            os.makedirs(self.records_dir)
         audio_data = self.audio_buffer.data()
 
         # Применяем усиление к аудиоданным
@@ -441,6 +518,8 @@ class MainWindow(QMainWindow):
             wav_file.writeframes(amplified_audio_data)
 
     def clean_old_records(self):
+        if not os.path.exists(self.records_dir):
+            os.makedirs(self.records_dir)
     # Получаем количество дней из положения слайдера
         days_to_keep = self.ui.horizontalSlider.value()
         
@@ -485,9 +564,8 @@ class MainWindow(QMainWindow):
     def update_timer_display(self):
         """Обновляет отображение времени записи."""
         self.elapsed_time += 1
-        if self.elapsed_time == self.get_selected_interval():
-                self.stop_recording()
-                self.start_recording()  # Начинаем новую запись
+        if self.elapsed_time == 60:
+            self.schedule_next_split()
         # Преобразование секунд в часы, минуты и секунды
         hours = self.elapsed_time // 3600
         minutes = (self.elapsed_time % 3600) // 60
@@ -659,6 +737,8 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         # Сохранение настроек при закрытии приложения
         self.save_settings()
+        if self.is_recording:
+            self.stop_recording()
         event.accept()
     def paintEvent(self, event):
         painter = QPainter(self)
