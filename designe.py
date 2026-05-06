@@ -448,23 +448,20 @@ class Ui_MainWindow(object):
         self.pushButton_4.setText(_translate("MainWindow", "10 хв"))
         self.rec_timer.setText(_translate("MainWindow", "<html><head/><body><p align=\"right\"><span style=\" font-size:11pt; font-weight:600;\">0:00:00</span></p></body></html>"))
         self.label_9.setText(_translate("MainWindow", "<html><head/><body><p align=\"center\"><span style=\" font-size:11pt;\">Диктофон</span></p></body></html>"))
+    
     def paintEvent(self, event):
-        # Пользовательская отрисовка скругленных углов
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        # Рисуем скругленный прямоугольник
         rect = self.rect()
         radius = 20
         path = QPainterPath()
         path.addRoundedRect(QRectF(rect), radius, radius)
         
-        # Рисуем пользовательский фон
-        painter.setBrush(QColor(255, 255, 255))  # Цвет фона окна
+        painter.setBrush(QColor(255, 255, 255))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawPath(path)
 
-        # Опционально: рисуем другой контент, если нужно
         painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationOver)
         painter.setBrush(self.palette().window())
         painter.drawPath(path)

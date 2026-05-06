@@ -1,74 +1,90 @@
 import sys
 import json
-from shutil import rmtree
-import numpy as np
-import wave
 import os
+import wave
 from datetime import datetime, timedelta
-from designe import Ui_MainWindow 
-from mini import Ui_MiniWindow
-from PyQt6.QtCore import QIODevice, QBuffer, QTimer, Qt, QPropertyAnimation, QEasingCurve, QRectF, QEvent, QAbstractAnimation
+from shutil import rmtree
+
+import numpy as np
+from PyQt6.QtCore import (
+    QIODevice, QBuffer, QTimer, Qt, QPropertyAnimation,
+    QEasingCurve, QRectF, QEvent, QAbstractAnimation
+)
 from PyQt6.QtMultimedia import QMediaDevices, QAudioSource, QAudioFormat
-from PyQt6.QtWidgets import QMainWindow, QApplication, QMessageBox, QPushButton, QSlider, QLabel, QComboBox, QGraphicsOpacityEffect, QFileDialog
-from PyQt6.QtGui import QIcon, QPainter, QColor, QPainterPath, QFontDatabase, QMouseEvent, QPixmap
+from PyQt6.QtWidgets import (
+    QMainWindow, QApplication, QMessageBox, QPushButton,
+    QSlider, QLabel, QComboBox, QGraphicsOpacityEffect, QFileDialog
+)
+from PyQt6.QtGui import (
+    QIcon, QPainter, QColor, QPainterPath, QFontDatabase,
+    QMouseEvent, QPixmap
+)
+
+from designe import Ui_MainWindow
+from mini import Ui_MiniWindow
+
 
 class MiniWindow(QMainWindow):
     def __init__(self):
         super(MiniWindow, self).__init__()
         self.ui = Ui_MiniWindow()
         self.ui.setupUi(self)
-        
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint |
-                    Qt.WindowType.WindowMinimizeButtonHint |
-                    Qt.WindowType.WindowSystemMenuHint |
-                    Qt.WindowType.WindowStaysOnTopHint)
+        self.is_dragging = False
+        self.mouse_start_position = None
+        self.window_start_position = None
+
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint |
+            Qt.WindowType.WindowMinimizeButtonHint |
+            Qt.WindowType.WindowSystemMenuHint |
+            Qt.WindowType.WindowStaysOnTopHint
+        )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        icon = QIcon(":/icons/icon.png")  # Specify the path to your icon
+        icon = QIcon(":/icons/icon.png")
         self.setWindowIcon(icon)
         self.setWindowTitle("Диктофон")
+
         self.ui.label.mousePressEvent = self.label_mouse_press_event
         self.ui.label.mouseMoveEvent = self.label_mouse_move_event
         self.ui.label.mouseReleaseEvent = self.label_mouse_release_event
         self.ui.rec_timer_2.hide()
         self.font_id = QFontDatabase.addApplicationFont(":/icons/Oswald-VariableFont_wght.ttf")
-        
-        
+
     def label_mouse_press_event(self, event: QMouseEvent):
-        """Запоминаем начальные позиции при нажатии на метку."""
+        """Store initial positions when pressing the label."""
         if event.button() == Qt.MouseButton.LeftButton:
             self.is_dragging = True
             self.mouse_start_position = event.globalPosition().toPoint()
             self.window_start_position = self.frameGeometry().topLeft()
 
     def label_mouse_move_event(self, event: QMouseEvent):
-        """Перемещаем окно при перемещении мыши."""
+        """Move window during mouse movement."""
         if self.is_dragging:
             delta = event.globalPosition().toPoint() - self.mouse_start_position
             self.move(self.window_start_position + delta)
 
     def label_mouse_release_event(self, event: QMouseEvent):
-        """Прекращаем перетаскивание при отпускании кнопки."""
+        """Stop dragging when the button is released."""
         if event.button() == Qt.MouseButton.LeftButton:
             self.is_dragging = False
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        
-        # Устанавливаем цвет фона окна
-        painter.setBrush(QColor(255, 255, 255))  # Белый фон, если необходимо
+
+        painter.setBrush(QColor(255, 255, 255))
         painter.setPen(Qt.PenStyle.NoPen)
 
-        # Рисуем скругленный прямоугольник
         rect = self.rect()
         radius = 20
         path = QPainterPath()
         path.addRoundedRect(QRectF(rect), radius, radius)
         painter.drawPath(path)
 
-        # Если хотите рисовать что-то поверх скругленного прямоугольника, например, фон
         painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationOver)
         painter.setBrush(self.palette().window())
         painter.drawPath(path)
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -78,29 +94,31 @@ class MainWindow(QMainWindow):
         self.records_dir = './records'
         if not os.path.exists(self.records_dir):
             os.makedirs(self.records_dir)
+
         self.ui.pushButton.setToolTip("Вибір папки збереження.")
         self.load_settings()
         self.setWindowTitle("Диктофон")
-                # Убрать стандартную панель сверху и закруглить окно
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint |
-                    Qt.WindowType.WindowMinimizeButtonHint |
-                    Qt.WindowType.WindowSystemMenuHint)
+
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint |
+            Qt.WindowType.WindowMinimizeButtonHint |
+            Qt.WindowType.WindowSystemMenuHint
+        )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedSize(620, 315)  # Ширина и высота в пикселях
+        self.setFixedSize(620, 315)
         self.is_recording = False
-        icon = QIcon(":/icons/icon.png")  # Specify the path to your icon
+        icon = QIcon(":/icons/icon.png")
         self.setWindowIcon(icon)
 
-        # Переменные для хранения состояния перетаскивания окна
         self.is_dragging = False
         self.mouse_start_position = None
         self.window_start_position = None
         self.setup_animations()
-        # Подключаем mouse-ивенты для метки
+
         self.ui.label_8.mousePressEvent = self.label_mouse_press_event
         self.ui.label_8.mouseMoveEvent = self.label_mouse_move_event
         self.ui.label_8.mouseReleaseEvent = self.label_mouse_release_event
-        # Подключаем кнопки сворачивания и закрытия к методам
+
         self.ui.minimize.clicked.connect(self.minimize_window)
         self.ui.close.clicked.connect(self.close_window)
 
@@ -109,90 +127,67 @@ class MainWindow(QMainWindow):
         self.mini_window.ui.rec_pause.clicked.connect(self.pause_recording)
         self.mini_window.ui.rec_start.clicked.connect(self.start_recording)
 
-
-        
-
-        
-        # Устанавливаем диапазон значений для первого слайдера
         self.ui.horizontalSlider.setMinimum(1)
         self.ui.horizontalSlider.setMaximum(7)
         self.ui.horizontalSlider.setTickInterval(1)
         self.ui.horizontalSlider.setSingleStep(1)
-        
-        # Подключаем сигнал изменения значения первого слайдера к слоту update_label_5
         self.ui.horizontalSlider.valueChanged.connect(self.update_label_5)
-        
-        # Обновляем метку при запуске, чтобы отображать текущее значение первого слайдера
         self.update_label_5(self.ui.horizontalSlider.value())
 
-        # Устанавливаем диапазон значений для второго слайдера (от 0 до 20, шаг - 1)
         self.ui.horizontalSlider_2.setMinimum(0)
         self.ui.horizontalSlider_2.setMaximum(20)
         self.ui.horizontalSlider_2.setTickInterval(1)
         self.ui.horizontalSlider_2.setSingleStep(1)
-        
-
-        # Подключаем сигнал изменения значения второго слайдера к слоту update_label_4
         self.ui.horizontalSlider_2.valueChanged.connect(self.update_label_4)
-
-        # Обновляем метку при запуске, чтобы отображать текущее значение второго слайдера
         self.update_label_4(self.ui.horizontalSlider_2.value())
-        # Подключаем сигнал нажатия на кнопку к общему обработчику
-        self.populate_microphones()
 
+        self.populate_microphones()
 
         self.recording_timer = QTimer()
         self.recording_timer.timeout.connect(self.update_timer_display)
         self.start_time = None
-        self.elapsed_time = 0  # Время записи в секундах
+        self.elapsed_time = 0
 
-                # Подключаем сигнал нажатия на кнопку к методам
-                        # Подключаем кнопки паузы и продолжения
         self.ui.rec_pause.clicked.connect(self.pause_recording)
         self.ui.rec_continue.clicked.connect(self.resume_recording)
         self.ui.rec_start.clicked.connect(self.start_recording)
         self.ui.rec_stop.clicked.connect(self.stop_recording)
-        # Подключаем кнопку выбора папки
         self.ui.pushButton.clicked.connect(self.choose_folder)
-        
-
 
         self.audio_source = None
+        self.audio_source_timer = None
         self.audio_file = None
         self.audio_buffer = None
+        self.audio_buffer_timer = None
         self.audio_data = bytearray()
         self.original_opacity_effects = {}
-                # Новый флаг для отслеживания состояния паузы
         self.is_paused = False
         self.audio_data_paused = bytearray()
 
-
-
-        # Инициализация таймера для мониторинга уровня звука
         self.split_timer = None
         self.sound_timer = QTimer()
-        self.sound_timer.setInterval(100)  # Интервал проверки (в миллисекундах)
+        self.sound_timer.setInterval(100)
         self.sound_timer.timeout.connect(self.monitor_sound)
         self.sound_timer.start()
-                # Подключаем событие изменения выбора в comboBox
-        self.ui.comboBox.currentIndexChanged.connect(self.update_microphone)
-        self.update_microphone()  # Устанавливаем аудио устройство по умолчанию
 
-        
+        self.ui.comboBox.currentIndexChanged.connect(self.update_microphone)
+        self.update_microphone()
+
     def get_selected_interval(self):
-        """Возвращает интервал времени в секундах на основе выбранной кнопки."""
+        """Return time interval in seconds based on the selected button."""
         button = self.ui.buttonGroup.checkedButton()
         if button == self.ui.pushButton_4:
-            return 10 * 60 # 10 минут
+            return 10 * 60
         elif button == self.ui.pushButton_5:
-            return 30 * 60  # 30 минут
+            return 30 * 60
         elif button == self.ui.pushButton_6:
-            return 60 * 60  # 60 минут
+            return 60 * 60
         elif button == self.ui.pushButton_7:
-            return 120 * 60  # 120 минут
+            return 120 * 60
         return None
+
     def update_microphone(self):
-        """Обновляет аудиоустройство на основе выбранного в comboBox."""
+        """Update audio device based on comboBox selection."""
         selected_device_description = self.ui.comboBox.currentText()
         input_devices = QMediaDevices.audioInputs()
         selected_device = None
@@ -204,104 +199,81 @@ class MainWindow(QMainWindow):
 
         if selected_device:
             format = QAudioFormat()
-            format.setSampleRate(44800)
-            format.setChannelCount(2)
+            format.setSampleRate(22050)
+            format.setChannelCount(1)
             format.setSampleFormat(QAudioFormat.SampleFormat.Int16)
+
+            if not selected_device.isFormatSupported(format):
+                format = selected_device.preferredFormat()
+                format.setSampleFormat(QAudioFormat.SampleFormat.Int16)
 
             self.audio_source_timer = QAudioSource(selected_device, format)
             self.audio_buffer_timer = self.audio_source_timer.start()
-            
-            if not self.audio_buffer_timer.isOpen():
-                self.audio_buffer = None
+
+            if self.audio_buffer_timer is None:
+                print("Failed to start audio source timer for monitoring")
+            elif not self.audio_buffer_timer.isOpen():
+                self.audio_buffer_timer = None
         else:
-            pass
+            self.audio_source_timer = None
+            self.audio_buffer_timer = None
 
     def monitor_sound(self):
-        """Мониторинг уровня звука и изменение иконки микрофона."""
-        
+        """Monitor sound level and update microphone icon."""
         if self.audio_source_timer and self.audio_buffer_timer:
-            
             data = self.audio_buffer_timer.readAll()
-
             if not data:
-                print("No data available")
                 return
 
-            # Преобразование аудио данных в массив numpy для анализа уровня звука
             audio_array = np.frombuffer(data, dtype=np.int16)
-
-            # Определяем средний уровень звука
             volume_level = np.abs(audio_array).mean()
-            
 
-            # Пороговое значение, чтобы определить, есть ли звук (регулируйте его)
-            slider_value = self.ui.horizontalSlider_2.value() 
-            
+            slider_value = self.ui.horizontalSlider_2.value()
             threshold = 150 - slider_value * 6
             if volume_level > threshold:
-                # Если звук превышает порог, делаем иконку зеленой
                 self.ui.micro.setPixmap(QPixmap(":/icons/micro_green.png"))
             else:
-                # Если звука нет, возвращаем обычную иконку
                 self.ui.micro.setPixmap(QPixmap(":/icons/micro.png"))
         else:
-            # Если аудио устройство не инициализировано, возвращаем обычную иконку
             self.ui.micro.setPixmap(QPixmap(":/icons/micro.png"))
-            
+
     def get_next_split_time(self, now: datetime) -> datetime:
-        """
-        Рассчитывает ближайшую &laquo;круглую&raquo; точку времени
-        для выбранного паттерна (10, 30, 60, 120 минут).
-        """
-        pattern = self.get_selected_interval() / 60
-        # Обрежем секунды и микросекунды, чтобы было удобнее считать
+        """Calculate the nearest 'round' time point for the selected pattern."""
+        interval = self.get_selected_interval()
+        if interval is None:
+            return now + timedelta(hours=1)
+        
+        pattern = interval / 60
         dt = now.replace(second=0, microsecond=0)
 
         if pattern == 10:
-            # Каждые 10 минут: XX:00, XX:10, XX:20, XX:30, XX:40, XX:50
             minute = dt.minute
             slot_10 = (minute // 10) + 1
             next_m = slot_10 * 10
             if next_m >= 60:
-                # Перекатываемся на следующий час
-                return (dt.replace(minute=0) + timedelta(hours=1))
-            else:
-                return dt.replace(minute=next_m)
+                return dt.replace(minute=0) + timedelta(hours=1)
+            return dt.replace(minute=next_m)
 
         elif pattern == 30:
-            # Каждые 30 минут: XX:00, XX:30
-            minute = dt.minute
-            if minute < 30:
+            if dt.minute < 30:
                 return dt.replace(minute=30)
-            else:
-                # Следующий час
-                return (dt.replace(minute=0) + timedelta(hours=1))
+            return dt.replace(minute=0) + timedelta(hours=1)
 
         elif pattern == 60:
-            # Каждый час: XX:00
-            # просто +1 час от текущего &laquo;округлённого&raquo;
             return dt.replace(minute=0) + timedelta(hours=1)
 
         elif pattern == 120:
-            # Каждые 2 часа
-            # Округляем до начала текущего часа
-            dt = dt.replace(minute=0, second=0, microsecond=0)
-            
-            # Если текущий час нечётный, переходим на ближайший чётный
+            dt = dt.replace(minute=0)
             if dt.hour % 2 != 0:
                 dt = dt + timedelta(hours=1)
-            
-            # Добавляем 2 часа от текущего "округлённого" времени
             return dt + timedelta(hours=2)
 
-        # fallback
         return dt + timedelta(hours=1)
 
     def schedule_next_split(self):
         if self.split_timer is not None:
             self.split_timer.stop()
-        
-            
+
         now = datetime.now()
         next_dt = self.get_next_split_time(now)
         print(f'Scheduled split time: {next_dt}')
@@ -310,18 +282,18 @@ class MainWindow(QMainWindow):
 
         self.split_timer = QTimer(self)
         self.split_timer.setSingleShot(True)
+
         def split_record():
             if self.is_recording and not self.is_paused:
                 self.stop_recording()
                 self.start_recording()
             elif self.is_paused:
                 self.schedule_next_split()
-            
+
         self.split_timer.timeout.connect(split_record)
         self.split_timer.start(ms)
 
     def update_label_5(self, value):
-        # Обновляем текст метки label_5 с сохранением стилей
         self.ui.label_5.setText(
             f'<html><head/><body><p align="center">'
             f'<span style="font-size:14pt; font-weight:600;">{value} Дн</span>'
@@ -329,64 +301,45 @@ class MainWindow(QMainWindow):
         )
 
     def update_label_4(self, value):
-        # Переводим значение слайдера в проценты (каждый шаг равен 5%)
         percentage = value * 5
-        # Обновляем текст метки label_4 с сохранением стилей
         self.ui.label_4.setText(
             f'<html><head/><body><p align="center">'
             f'<span style="font-size:12pt; font-weight:600;">{percentage}%</span>'
             f'</p></body></html>'
         )
-        
 
     def populate_microphones(self):
-        # Получаем список всех доступных аудиоустройств ввода
         input_devices = QMediaDevices.audioInputs()
-
-        # Очищаем comboBox перед заполнением
         self.ui.comboBox.clear()
 
-        # Проверяем, есть ли доступные устройства ввода
         if not input_devices:
             self.ui.comboBox.addItem("Немає доступних пристроїв")
         else:
-            # Добавляем доступные устройства ввода в comboBox
             for device in input_devices:
                 self.ui.comboBox.addItem(device.description())
 
     def amplify_audio(self, data, gain):
-        """
-        Метод для усиления аудиоданных.
-        data: исходные данные аудио (байтовый формат)
-        gain: коэффициент усиления (например, 1.5 для 150%)
-        """
-        # Конвертируем байты в numpy массив для работы с числами
+        """Method to amplify audio data. gain: amplification factor."""
         audio_data = np.frombuffer(data, dtype=np.int16)
-        
-        # Применяем коэффициент усиления
         amplified_data = audio_data * gain
-
-        # Убедимся, что значения не выходят за пределы диапазона int16
         amplified_data = np.clip(amplified_data, -32768, 32767)
-
-        # Возвращаем данные в байтовом формате
         return amplified_data.astype(np.int16).tobytes()
 
     def start_recording(self):
         self.clean_old_records()
         if self.is_paused:
-            # Если на паузе, продолжаем запись
             self.resume_recording()
         else:
-            
             self.block_groupbox_elements(True)
             self.start_timer()
 
             selected_device_description = self.ui.comboBox.currentText()
             input_devices = QMediaDevices.audioInputs()
             selected_device = None
+
             if not os.path.exists(self.records_dir):
                 os.makedirs(self.records_dir)
+
             for device in input_devices:
                 if device.description() == selected_device_description:
                     selected_device = device
@@ -409,10 +362,11 @@ class MainWindow(QMainWindow):
             self.start_time = datetime.now()
             date_folder = self.start_time.strftime("%d-%m-%Y")
             self.date_folder_path = os.path.join(self.records_dir, date_folder)
+
             if not os.path.exists(self.date_folder_path):
                 os.makedirs(self.date_folder_path)
 
-            self.file_name = self.start_time.strftime("%H-%M-%S") + ".wav"
+            self.file_name = f"{self.start_time.strftime('%H-%M-%S')}.wav"
             self.file_path = os.path.join(self.date_folder_path, self.file_name)
 
             slider_value = self.ui.horizontalSlider_2.value() * 10 / 100.0
@@ -427,12 +381,10 @@ class MainWindow(QMainWindow):
             self.animate_button(self.ui.rec_start, False)
             self.ui.rec_start.setEnabled(False)
             self.mini_window.ui.rec_start.setEnabled(False)
-            
-
 
     def pause_recording(self):
-        """Приостановка записи."""
-        if self.audio_source and self.is_recording == True:
+        """Pause recording."""
+        if self.audio_source and self.is_recording:
             self.is_paused = True
             self.audio_source.stop()
             if self.audio_buffer:
@@ -445,10 +397,9 @@ class MainWindow(QMainWindow):
                 self.animate_button(self.ui.rec_pause, False)
                 self.mini_window.ui.rec_pause.setEnabled(False)
                 self.ui.rec_pause.setEnabled(False)
-                
 
     def resume_recording(self):
-        """Возобновление записи."""
+        """Resume recording."""
         if self.is_paused:
             self.is_paused = False
             self.audio_buffer = QBuffer()
@@ -470,13 +421,13 @@ class MainWindow(QMainWindow):
                 self.audio_buffer.close()
                 self.audio_buffer = None
 
-            # Сохраняем запись
             amplified_audio_data = self.amplify_audio(self.audio_data, self.gain)
             with wave.open(self.file_path, 'wb') as wav_file:
                 wav_file.setnchannels(1)
                 wav_file.setsampwidth(2)
                 wav_file.setframerate(22050)
                 wav_file.writeframes(amplified_audio_data)
+
             self.is_recording = False
             self.is_paused = False
             self.audio_data = bytearray()
@@ -486,6 +437,7 @@ class MainWindow(QMainWindow):
             self.ui.rec_pause.setEnabled(True)
             self.ui.rec_start.setChecked(False)
             self.mini_window.ui.rec_start.setChecked(False)
+
             if self.split_timer:
                 self.split_timer.stop()
             self.stop_timer()
@@ -496,105 +448,101 @@ class MainWindow(QMainWindow):
             if not os.path.exists(self.records_dir):
                 os.makedirs(self.records_dir)
 
-
-
     def save_audio_data(self):
-        # Получаем данные из буфера
         if not os.path.exists(self.records_dir):
             os.makedirs(self.records_dir)
         audio_data = self.audio_buffer.data()
-
-        # Применяем усиление к аудиоданным
         amplified_audio_data = self.amplify_audio(audio_data, self.gain)
-
-        # Указываем путь к файлу для записи
         file_path = os.path.join(self.records_dir, self.file_name)
 
-        # Записываем данные в файл WAV
         with wave.open(file_path, 'wb') as wav_file:
-            wav_file.setnchannels(1)         # Моно
-            wav_file.setsampwidth(2)         # 2 байта для Int16
-            wav_file.setframerate(22050)     # Уменьшенная частота дискретизации
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(22050)
             wav_file.writeframes(amplified_audio_data)
 
     def clean_old_records(self):
         if not os.path.exists(self.records_dir):
             os.makedirs(self.records_dir)
-    # Получаем количество дней из положения слайдера
+
         days_to_keep = self.ui.horizontalSlider.value()
-        
-        # Получаем текущую дату
         today = datetime.now()
 
-        # Проходим по всем папкам в основной папке для записей
         for folder_name in os.listdir(self.records_dir):
             folder_path = os.path.join(self.records_dir, folder_name)
-            
-            # Проверяем, является ли это папкой и соответствует ли она формату даты
             if os.path.isdir(folder_path):
                 try:
                     folder_date = datetime.strptime(folder_name, "%d-%m-%Y")
                 except ValueError:
-                    continue  # Если формат неверный, пропускаем папку
-                
-                # Вычисляем разницу в днях между текущей датой и датой папки
-                days_diff = (today - folder_date).days
+                    continue
 
-                # Если папка старше указанного количества дней, удаляем её
+                days_diff = (today - folder_date).days
                 if days_diff > days_to_keep:
                     rmtree(folder_path)
-                    print(f"Удалена папка: {folder_path}")
+                    print(f"Deleted folder: {folder_path}")
+
     def start_timer(self):
-        """Запускает таймер и показывает элемент."""
-        self.start_time = 0  # Устанавливаем начальное время
+        """Start timer and show the element."""
+        self.start_time = 0
         self.elapsed_time = 0
-        self.ui.rec_timer.show()  # Показываем QLabel
+        self.ui.rec_timer.show()
         self.mini_window.ui.rec_timer_2.show()
-        self.recording_timer.start(1000)  # Запускаем таймер с интервалом 1 секунда
-        self.ui.rec_timer.setText(f"<html><head/><body><p align=\"right\"><span style=\" font-size:11pt; font-weight:600;\">0:00:00</span></p></body></html>")
+        self.recording_timer.start(1000)
+        self.ui.rec_timer.setText(
+            "<html><head/><body><p align=\"right\">"
+            "<span style=\" font-size:11pt; font-weight:600;\">0:00:00</span></p></body></html>"
+        )
 
     def stop_timer(self):
-        """Останавливает таймер, сбрасывает время и прячет элемент."""
-        self.recording_timer.stop()  # Останавливаем таймер
+        """Stop timer, reset time, and hide the element."""
+        self.recording_timer.stop()
         self.start_time = None
-        self.elapsed_time = 0  # Сбрасываем время
-        self.ui.rec_timer.hide()  # Прячем QLabel
+        self.elapsed_time = 0
+        self.ui.rec_timer.hide()
         self.mini_window.ui.rec_timer_2.hide()
 
     def update_timer_display(self):
-        """Обновляет отображение времени записи."""
+        """Update recording time display."""
         self.elapsed_time += 1
         if self.elapsed_time == 60:
             self.schedule_next_split()
-        # Преобразование секунд в часы, минуты и секунды
+
         hours = self.elapsed_time // 3600
         minutes = (self.elapsed_time % 3600) // 60
         seconds = self.elapsed_time % 60
-        self.ui.rec_timer.setText(f"<html><head/><body><p align=\"right\"><span style=\" font-size:11pt; font-weight:600;\">{hours}:{minutes:02}:{seconds:02}</span></p></body></html>")
-        self.mini_window.ui.rec_timer_2.setText(f"<html><head/><body><p align=\"center\"><span style=\" font-size:10pt; font-weight:600;\">{hours}:{minutes:02}:{seconds:02}</span></p></body></html>")
+        self.ui.rec_timer.setText(
+            f"<html><head/><body><p align=\"right\"><span style=\" font-size:11pt; font-weight:600;\">"
+            f"{hours}:{minutes:02}:{seconds:02}</span></p></body></html>"
+        )
+        self.mini_window.ui.rec_timer_2.setText(
+            f"<html><head/><body><p align=\"center\"><span style=\" font-size:10pt; font-weight:600;\">"
+            f"{hours}:{minutes:02}:{seconds:02}</span></p></body></html>"
+        )
 
     def choose_folder(self):
-        """Открывает диалог выбора папки и сохраняет выбранный путь."""
+        """Open folder selection dialog and save the selected path."""
         folder = QFileDialog.getExistingDirectory(self, "Виберіть папку для збереження записів.", self.records_dir)
         if folder:
             self.records_dir = folder
-            # Обновляем настройки
             self.save_settings()
+
     def get_checked_button_text(self):
         checked_button = self.ui.buttonGroup.checkedButton()
         return checked_button.text() if checked_button else None
+
     def set_checked_button_by_text(self, text):
         for button in self.ui.buttonGroup.buttons():
             if button.text() == text:
                 button.setChecked(True)
                 break
+
     def reset_settings(self):
-        """Сбрасывает настройки к значениям по умолчанию."""
+        """Reset settings to default."""
         self.ui.horizontalSlider.setValue(1)
         self.ui.horizontalSlider_2.setValue(0)
         self.records_dir = './records'
-        self.ui.buttonGroup.setExclusive(False)  # Чтобы не проверять кнопку по умолчанию
-        self.ui.pushButton_4.setChecked(True)  # Установим кнопку по умолчанию (например, 10 минут)
+        self.ui.buttonGroup.setExclusive(False)
+        self.ui.pushButton_4.setChecked(True)
         self.ui.buttonGroup.setExclusive(True)
         self.save_settings()
 
@@ -602,10 +550,9 @@ class MainWindow(QMainWindow):
         settings = {
             'slider1_value': self.ui.horizontalSlider.value(),
             'slider2_value': self.ui.horizontalSlider_2.value(),
-            'records_dir': self.records_dir,  # Сохраняем путь к папке
+            'records_dir': self.records_dir,
             'files_cut': self.ui.buttonGroup.checkedButton().objectName() if self.ui.buttonGroup.checkedButton() else None
         }
-        
         with open('settings.json', 'w', encoding='utf-8') as f:
             json.dump(settings, f, ensure_ascii=False, indent=4)
 
@@ -613,18 +560,16 @@ class MainWindow(QMainWindow):
         try:
             with open('settings.json', 'r', encoding='utf-8') as f:
                 settings = json.load(f)
-            
-            # Устанавливаем значения для слайдеров
+
             if 'slider1_value' in settings:
                 self.ui.horizontalSlider.setValue(settings['slider1_value'])
             if 'slider2_value' in settings:
                 self.ui.horizontalSlider_2.setValue(settings['slider2_value'])
             if 'records_dir' in settings:
-                self.records_dir = settings['records_dir']  # Загружаем путь к папке
+                self.records_dir = settings['records_dir']
                 path = os.path.normpath(os.path.join(os.getcwd(), self.records_dir))
                 self.ui.pushButton.setToolTip(f"{path}")
             if 'files_cut' in settings:
-                # Если в настройках указана кнопка, то устанавливаем её
                 checked_button = settings.get('files_cut')
                 if checked_button:
                     for button in self.ui.buttonGroup.buttons():
@@ -632,15 +577,12 @@ class MainWindow(QMainWindow):
                             button.setChecked(True)
                             break
         except (FileNotFoundError, json.JSONDecodeError) as e:
-            print(f"Ошибка при загрузке настроек: {e}. Используем значения по умолчанию.")
+            print(f"Error loading settings: {e}. Using defaults.")
             self.reset_settings()
+
     def block_groupbox_elements(self, block):
-        """
-        Блокирует или разблокирует все элементы внутри groupBox и изменяет их прозрачность.
-        :param block: True для блокировки, False для разблокировки
-        """
+        """Block or unblock elements inside groupBox and change opacity."""
         if block:
-            # Сохранение исходных эффектов прозрачности и установка полупрозрачности
             for element in self.ui.groupBox.findChildren((QPushButton, QSlider, QLabel, QComboBox)):
                 if element.isEnabled():
                     effect = QGraphicsOpacityEffect()
@@ -649,46 +591,45 @@ class MainWindow(QMainWindow):
                     self.original_opacity_effects[element] = effect
                     element.setEnabled(False)
         else:
-            # Восстановление исходных эффектов прозрачности и разблокировка
             for element, effect in self.original_opacity_effects.items():
-                element.setGraphicsEffect(None)  # Удаление эффекта прозрачности
+                element.setGraphicsEffect(None)
                 element.setEnabled(True)
-            self.original_opacity_effects.clear()  # Очистка словаря
+            self.original_opacity_effects.clear()
+
     def label_mouse_press_event(self, event):
-        """Запоминаем начальные позиции при нажатии на метку."""
+        """Store initial positions on label press."""
         if event.button() == Qt.MouseButton.LeftButton:
             self.is_dragging = True
             self.mouse_start_position = event.globalPosition().toPoint()
             self.window_start_position = self.frameGeometry().topLeft()
 
     def label_mouse_move_event(self, event):
-        """Перемещаем окно при перемещении мыши."""
+        """Move window on mouse move."""
         if self.is_dragging:
             delta = event.globalPosition().toPoint() - self.mouse_start_position
             self.move(self.window_start_position + delta)
 
     def label_mouse_release_event(self, event):
-        """Прекращаем перетаскивание при отпускании кнопки."""
+        """Stop dragging on button release."""
         if event.button() == Qt.MouseButton.LeftButton:
             self.is_dragging = False
+
     def setup_animations(self):
-        # Словарь для хранения анимаций и их состояний
         self.animations = {}
         self.original_rects = {}
-        
-        # Список кнопок, для которых нужно добавить анимацию
-        buttons = [self.ui.rec_start, self.ui.rec_stop, self.ui.rec_pause, 
-               self.ui.rec_continue, self.ui.pushButton_4, self.ui.pushButton_5, 
-               self.ui.pushButton_6, self.ui.pushButton_7]
-        # Настройка анимации для каждой кнопки
+        buttons = [
+            self.ui.rec_start, self.ui.rec_stop, self.ui.rec_pause,
+            self.ui.rec_continue, self.ui.pushButton_4, self.ui.pushButton_5,
+            self.ui.pushButton_6, self.ui.pushButton_7
+        ]
         for button in buttons:
             button.installEventFilter(self)
             self.original_rects[button] = button.geometry()
             animation = QPropertyAnimation(button, b"geometry")
-            animation.setDuration(200)  # Длительность анимации в миллисекундах
+            animation.setDuration(200)
             animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
             self.animations[button] = animation
-    
+
     def eventFilter(self, obj, event):
         if obj in self.animations:
             if event.type() == QEvent.Type.Enter:
@@ -696,70 +637,67 @@ class MainWindow(QMainWindow):
             elif event.type() == QEvent.Type.Leave:
                 self.animate_button(obj, increase=False)
         return super(MainWindow, self).eventFilter(obj, event)
-    
+
     def animate_button(self, button, increase):
         animation = self.animations[button]
         if self.is_button_blocked(button) is None:
-            return  # Не применять анимацию, если кнопка заблокирована
-        # Получаем начальные и конечные размеры для анимации
+            return
+
         start_rect = button.geometry()
         if increase:
-            end_rect = start_rect.adjusted(-3, -3, 3, 3)  # Увеличиваем размеры
+            end_rect = start_rect.adjusted(-3, -3, 3, 3)
         else:
-            end_rect = self.original_rects[button]  # Возвращаем к исходным размерам
-        
-        # Если анимация уже была запущена, останавливаем ее
+            end_rect = self.original_rects[button]
+
         if animation.state() == QAbstractAnimation.State.Running:
             animation.stop()
-        
+
         animation.setStartValue(start_rect)
         animation.setEndValue(end_rect)
         animation.start()
+
     def is_button_blocked(self, button):
-        """
-        Проверяет, заблокирована ли кнопка.
-        :param button: QPushButton
-        :return: True если кнопка заблокирована, иначе False
-        """
+        """Check if the button is blocked."""
         if button.isEnabled():
             return True
-        else:
-            return None
+        return None
+
     def minimize_window(self):
-        self.hide()  # Скрываем текущее окно
-        self.mini_window.show()  # Показываем окно MiniWindow
+        self.hide()
+        self.mini_window.show()
+
     def restore_main_window(self):
-        """Метод для восстановления главного окна."""
-        self.show()  # Показываем главное окно
-        self.mini_window.hide()  # Скрываем окно MiniWindow
+        """Restore main window."""
+        self.show()
+        self.mini_window.hide()
+
     def close_window(self):
         self.close()
+
     def closeEvent(self, event):
-        # Сохранение настроек при закрытии приложения
         self.save_settings()
         if self.is_recording:
             self.stop_recording()
         event.accept()
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        
-        # Устанавливаем цвет фона окна
-        painter.setBrush(QColor(255, 255, 255))  # Белый фон, если необходимо
+
+        painter.setBrush(QColor(255, 255, 255))
         painter.setPen(Qt.PenStyle.NoPen)
 
-        # Рисуем скругленный прямоугольник
         rect = self.rect()
         radius = 20
         path = QPainterPath()
         path.addRoundedRect(QRectF(rect), radius, radius)
         painter.drawPath(path)
 
-        # Если хотите рисовать что-то поверх скругленного прямоугольника, например, фон
         painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationOver)
         painter.setBrush(self.palette().window())
         painter.drawPath(path)
-    
+
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()

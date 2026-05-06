@@ -5,3 +5,5 @@ records/
 __pycache__/
 main.spec
 build/
+.vscode/
+venv/
