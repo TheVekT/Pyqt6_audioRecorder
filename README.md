@@ -1,5 +1,9 @@
 # Audio.Recorder
 
+> **Project status:** completed and will not receive further updates.
+>
+> Built in a few days for a custom request. The project is complete, published here as a portfolio code sample. The latest working version is always available in [Releases](https://github.com/TheVekT/Pyqt6_audioRecorder/releases).
+
 A simple, lightweight audio recorder designed for long-term background monitoring and room recording. It focuses on stability and minimal disk space usage rather than high-fidelity audio.
 
 ## Key Features
